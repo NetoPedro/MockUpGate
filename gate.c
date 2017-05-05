@@ -16,10 +16,10 @@
  struct message {
 	unsigned char version; 
 	unsigned char sub_version; 
-	unsigned short data_length; 
+	unsigned char data_length[2]; 
 	unsigned char message_type; 
 	unsigned char encryption_type; 
-	unsigned int timestamp ; 
+	unsigned char timestamp [4]; 
 	char data_content[TEMPORARY_SIZE] ; 
 	};
 
@@ -83,14 +83,23 @@ void send_type1_message(int fd,  char *  numberDoors,  char * idGate){
 	message_type1.version  = '1';
 	message_type1.sub_version = '0';
 	message_type1.message_type = '1';
-	message_type1.encryption_type = '0'; 
-	message_type1.timestamp = (unsigned)time(NULL); 
-	char string [TEMPORARY_SIZE-1]; 
-	strcpy(string,numberDoors); 
-	strcat(string, idGate);
-	strcpy(message_type1.data_content,string); 
-	message_type1.data_length = strlen(message_type1.data_content);
-	write(fd,&message_type1,sizeof(message_type1));
+	message_type1.encryption_type = '0';
+	long times = (unsigned) time(NULL);
+	int k = 0;
+	for(; k< 4 ; k++){
+		message_type1.timestamp[k] = times%256; 
+		times = times/256; 
+		}
+	message_type1.data_content[1] = atoi(idGate); 
+	message_type1.data_content[0] = atoi(numberDoors); 
+	
+	short length = strlen(message_type1.data_content);
+	short length2 = length +10;
+	for(k= 0; k< 2 ; k++){
+		message_type1.data_length[k] = length%256; 
+		length = length/256; 
+		}
+	write(fd,&message_type1,length2);
 	printf("Mensagem enviada Tipo 1\n");
 	
 	
@@ -102,27 +111,39 @@ void read_type2_message(int fd){
 	printf("Mensagem Lida Tipo 2\n");
 	
 	}
-void send_type3_message(int fd, char * doors){
+void send_type3_message(int fd, unsigned char * doors, int size){
 	struct message message_type3 ;
 	message_type3.version  = '1';
 	message_type3.sub_version = '0';
 	message_type3.message_type = '3';
 	message_type3.encryption_type = '0'; 
-	message_type3.timestamp =  (unsigned)time(NULL);  
+	int times = (unsigned) time(NULL);
+	int k = 0;
+	for(; k< 4 ; k++){
+		message_type3.timestamp[k] = times%256; 
+		times = times/256; 
+		}  
 	char string[TEMPORARY_SIZE-1] ; 
 	int j = 0; 
-	strcpy(string, doors); 
-	strcpy(message_type3.data_content,string); 
-	message_type3.data_length = strlen(message_type3.data_content);
-	write(fd,&message_type3,sizeof(message_type3));
+	strcpy(message_type3.data_content,doors); 
+	for(;j<size;j++){
+			message_type3.data_content[j] = doors[j]; 
+	}
+	short length = size;
+	short length2 = size +10;
+	for(k = 0; k< 2 ; k++){
+		message_type3.data_length[k] = length%256; 
+		length = length/256; 
+		}
+	write(fd,&message_type3,length2);
 	printf("Mensagem enviada Tipo 3\n");
 	}
 
-void initializeDoors(char * doors,int size){
+void initializeDoors(unsigned char * doors,int size){
 	printf("%d\n",size); 
 	int i = 0; 
 	for(;i<size ;i++){
-			doors[i] = '0';
+			doors[i] = 0;
 		}
     doors[size] = 0;
 	}
@@ -136,7 +157,7 @@ int main(int argc , char** argv){
 	
 	fd_set rfds, rfds_master;
 	int size =  toString(*(argv+3));
-	char doors[size+1];
+	unsigned char doors[size+1];
 	initializeDoors(doors, size);
     printf("%s\n",doors);
     printf("%s\n",*(argv + 2));
@@ -151,14 +172,14 @@ int main(int argc , char** argv){
 
 			//Check if the timeout works
 			struct timeval tv ; 
-			tv.tv_sec = 15; 
+			tv.tv_sec = 60; 
 			tv.tv_usec = 0; 
 			FD_ZERO(&rfds);
 			FD_SET(0,&rfds); FD_SET(fd,&rfds);
-			sleep(45);
+			//sleep(45);
 			int retVal = select(fd+1,&rfds,NULL,NULL,&tv);
 			
-			if(retVal==0) {
+			if(FD_ISSET(0,&rfds)) {
 
 				close(fd);
 				printf("Desconectado\n");
@@ -168,7 +189,7 @@ int main(int argc , char** argv){
 			 
 			read_type2_message(fd);
 		
-			send_type3_message(fd, doors);
+			send_type3_message(fd, doors,size);
 		}
 	}
 	
